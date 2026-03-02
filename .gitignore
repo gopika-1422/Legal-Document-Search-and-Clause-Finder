@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+uploads/
+inverted_index.json
+documents_metadata.json
+ir_store.json
+venv/
+.env
+*.egg-info/

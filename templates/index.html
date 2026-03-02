@@ -1,0 +1,354 @@
+
+import os
+
+# Create templates folder
+os.makedirs('templates', exist_ok=True)
+os.makedirs('uploads', exist_ok=True)
+
+# Delete old broken index files
+for f in ['inverted_index.json', 'documents_metadata.json', 'ir_store.json']:
+    if os.path.exists(f):
+        os.remove(f)
+        print(f"Deleted {f}")
+
+# Write the correct index.html
+html = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal Document Search & Clause Finder</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; color: white; margin-bottom: 30px; }
+        h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .subtitle { font-size: 1.1em; opacity: 0.9; }
+        .main-content { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .card { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .card h2 { color: #667eea; margin-bottom: 20px; font-size: 1.5em; border-bottom: 3px solid #667eea; padding-bottom: 10px; }
+        .upload-area { border: 3px dashed #667eea; border-radius: 10px; padding: 50px; text-align: center; transition: all 0.3s ease; cursor: pointer; background: #f8f9ff; }
+        .upload-area:hover, .upload-area.dragover { background: #e8ebff; border-color: #764ba2; transform: scale(1.02); }
+        .upload-icon { font-size: 4em; color: #667eea; margin-bottom: 20px; }
+        .upload-text { font-size: 1.2em; color: #333; margin-bottom: 10px; }
+        .upload-hint { color: #666; font-size: 0.9em; }
+        #fileInput { display: none; }
+        .btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 25px; font-size: 1em; cursor: pointer; transition: all 0.3s ease; margin-top: 15px; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
+        .search-box { display: flex; gap: 10px; margin-bottom: 15px; }
+        #searchInput { flex: 1; padding: 15px 20px; border: 2px solid #e0e0e0; border-radius: 25px; font-size: 1em; outline: none; }
+        #searchInput:focus { border-color: #667eea; }
+        .search-hint { background: #f0f4ff; padding: 15px; border-radius: 10px; color: #555; font-size: 0.9em; margin-top: 10px; }
+        .search-hint strong { color: #667eea; }
+        .loading { display: none; text-align: center; padding: 20px; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .result-item { background: #f8f9ff; border-left: 4px solid #667eea; padding: 20px; margin-bottom: 15px; border-radius: 8px; }
+        .result-item:hover { box-shadow: 0 5px 15px rgba(0,0,0,0.1); transform: translateX(5px); }
+        .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .result-filename { font-size: 1.2em; font-weight: bold; color: #333; }
+        .result-score { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
+        .result-meta { color: #666; font-size: 0.9em; margin-bottom: 15px; }
+        .clause { background: white; padding: 15px; border-radius: 5px; margin-bottom: 10px; border-left: 3px solid #764ba2; font-size: 0.95em; line-height: 1.6; color: #333; }
+        .clause-label { font-weight: bold; color: #667eea; margin-bottom: 5px; font-size: 0.9em; }
+        .status-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; }
+        .status-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; }
+        .status-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; }
+        .empty-state { text-align: center; padding: 40px; color: #999; }
+        .empty-state-icon { font-size: 3em; margin-bottom: 10px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; }
+        .stat-label { font-size: 0.9em; opacity: 0.9; }
+        .document-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9ff; border-radius: 8px; margin-bottom: 10px; }
+        .document-item:hover { background: #e8ebff; }
+        .document-name { font-weight: bold; color: #333; }
+        .document-meta { font-size: 0.85em; color: #666; margin-top: 3px; }
+        .delete-btn { background: #ff4757; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.9em; }
+        .delete-btn:hover { background: #e53935; }
+        /* IR TABLES */
+        #irTablesSection { display: none; margin-top: 30px; }
+        #irTablesSection h3 { color: #667eea; font-size: 1.4em; margin-bottom: 20px; padding-top: 20px; border-top: 3px solid #e8ebff; }
+        .ir-table-block { background: #fff; border: 2px solid #e0e4ff; border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+        .ir-table-title { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 20px; font-weight: bold; font-size: 1em; }
+        .ir-table-body { padding: 15px 20px; overflow-x: auto; }
+        .ir-caption { font-size: 0.82em; color: #888; font-style: italic; margin-bottom: 10px; }
+        .ir-tbl { width: 100%; border-collapse: collapse; font-size: 0.85em; min-width: 300px; }
+        .ir-tbl th { background: #667eea; color: white; padding: 9px 13px; text-align: left; white-space: nowrap; font-weight: 600; }
+        .ir-tbl td { padding: 8px 13px; border-bottom: 1px solid #e8ebff; vertical-align: middle; }
+        .ir-tbl tbody tr:nth-child(even) td { background: #f5f6ff; }
+        .ir-tbl tbody tr:hover td { background: #eceeff; }
+        .ir-tbl tbody tr.best-row td { background: #e8f5e9 !important; color: #1b5e20 !important; font-weight: bold; }
+        .match-yes { color: #2e7d32; font-weight: bold; }
+        .match-no { color: #c62828; }
+        .bar-container { background: #e0e4ff; border-radius: 4px; height: 10px; width: 90px; display: inline-block; vertical-align: middle; }
+        .bar-fill { background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; border-radius: 4px; }
+        .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-size: 0.82em; font-weight: bold; }
+        .rank-badge.gold { background: linear-gradient(135deg, #fbc02d, #e65100); }
+        .doc-pill { display: inline-block; background: #e8ebff; border-radius: 10px; padding: 2px 9px; margin: 2px 3px 2px 0; font-size: 0.8em; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>&#9878;&#65039; Legal Document Search &amp; Clause Finder</h1>
+        <p class="subtitle">Upload legal documents and search for specific clauses using Boolean operators</p>
+    </header>
+    <div class="main-content">
+        <div class="card">
+            <h2>&#128193; Upload Documents</h2>
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">&#128196;</div>
+                <div class="upload-text">Drag &amp; Drop files here</div>
+                <div class="upload-hint">or click to browse your files</div>
+                <div class="upload-hint" style="margin-top:6px">Supported: PDF, DOCX, TXT</div>
+                <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+            </div>
+            <input type="file" id="fileInput" multiple accept=".pdf,.docx,.doc,.txt">
+            <div id="uploadStatus"></div>
+        </div>
+        <div class="card">
+            <h2>&#128269; Search Documents</h2>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Enter keywords... (e.g., transmitter, delta modulation)">
+                <button class="btn" onclick="performSearch()">Search</button>
+            </div>
+            <div class="search-hint">
+                <strong>Search Tips:</strong> Use <strong>AND</strong>, <strong>OR</strong>, <strong>NOT</strong>.
+                Example: "transmitter AND modulation"
+            </div>
+            <div class="loading" id="searchLoading">
+                <div class="spinner"></div>
+                <p>Searching...</p>
+            </div>
+            <div id="searchResults"></div>
+            <div id="irTablesSection">
+                <h3>&#128202; Information Retrieval Tables</h3>
+                <div class="ir-table-block">
+                    <div class="ir-table-title">&#128203; Table 1 &mdash; Inverted Index</div>
+                    <div class="ir-table-body">
+                        <p class="ir-caption">Shows which documents contain each query term and the document frequency (df).</p>
+                        <div id="tbl1"></div>
+                    </div>
+                </div>
+                <div class="ir-table-block">
+                    <div class="ir-table-title">&#128280; Table 2 &mdash; Boolean Retrieval Result</div>
+                    <div class="ir-table-body">
+                        <p class="ir-caption">Documents retrieved using Boolean AND / OR / NOT on the query.</p>
+                        <div id="tbl2"></div>
+                    </div>
+                </div>
+                <div class="ir-table-block">
+                    <div class="ir-table-title">&#128200; Table 3 &mdash; TF (Term Frequency)</div>
+                    <div class="ir-table-body">
+                        <p class="ir-caption">TF(t,d) = count of term t in document d &divide; total tokens in document d</p>
+                        <div id="tbl3"></div>
+                    </div>
+                </div>
+                <div class="ir-table-block">
+                    <div class="ir-table-title">&#128201; Table 4 &mdash; IDF (Inverse Document Frequency)</div>
+                    <div class="ir-table-body">
+                        <p class="ir-caption">IDF(t) = log((N+1)/(df+1)) + 1 &nbsp;&mdash;&nbsp; N = total documents, df = docs containing term</p>
+                        <div id="tbl4"></div>
+                    </div>
+                </div>
+                <div class="ir-table-block">
+                    <div class="ir-table-title">&#9889; Table 5 &mdash; TF-IDF</div>
+                    <div class="ir-table-body">
+                        <p class="ir-caption">TF-IDF(t,d) = TF(t,d) &times; IDF(t) &mdash; higher = more important term in that document.</p>
+                        <div id="tbl5"></div>
+                    </div>
+                </div>
+                <div class="ir-table-block">
+                    <div class="ir-table-title">&#128208; Table 6 &mdash; Cosine Similarity</div>
+                    <div class="ir-table-body">
+                        <p class="ir-caption">Cosine(Q,D) = (Q&middot;D) / (|Q|&times;|D|) &mdash; angle between query and document TF-IDF vectors.</p>
+                        <div id="tbl6"></div>
+                    </div>
+                </div>
+                <div class="ir-table-block">
+                    <div class="ir-table-title">&#127942; Table 7 &mdash; Document Ranking</div>
+                    <div class="ir-table-body">
+                        <p class="ir-caption">Documents ranked by cosine similarity &mdash; Rank 1 is the best match.</p>
+                        <div id="tbl7"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>&#128218; Uploaded Documents</h2>
+            <div class="stats" id="statsContainer"></div>
+            <div class="document-list" id="documentList"></div>
+        </div>
+    </div>
+</div>
+<script>
+    let documents = [];
+    document.addEventListener('DOMContentLoaded', function() { loadDocuments(); setupEventListeners(); });
+    function setupEventListeners() {
+        document.getElementById('fileInput').addEventListener('change', function(e) { handleFiles(e.target.files); });
+        const ua = document.getElementById('uploadArea');
+        ua.addEventListener('dragover', function(e) { e.preventDefault(); ua.classList.add('dragover'); });
+        ua.addEventListener('dragleave', function(e) { e.preventDefault(); ua.classList.remove('dragover'); });
+        ua.addEventListener('drop', function(e) { e.preventDefault(); ua.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+        ua.addEventListener('click', function() { document.getElementById('fileInput').click(); });
+        document.getElementById('searchInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') performSearch(); });
+    }
+    function handleFiles(files) {
+        if (!files.length) return;
+        const fd = new FormData();
+        for (let f of files) fd.append('files', f);
+        showStatus('info', 'Uploading ' + files.length + ' file(s)...', 'uploadStatus');
+        fetch('/upload', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const ok = data.results.filter(r => r.success).length;
+                    showStatus('success', 'Uploaded ' + ok + '/' + data.results.length + ' file(s).<br>' + data.results.map(r => r.filename + ': ' + r.message).join('<br>'), 'uploadStatus');
+                    loadDocuments();
+                    document.getElementById('fileInput').value = '';
+                } else showStatus('error', data.message || 'Upload failed', 'uploadStatus');
+            })
+            .catch(e => showStatus('error', 'Upload error: ' + e.message, 'uploadStatus'));
+    }
+    function performSearch() {
+        const query = document.getElementById('searchInput').value.trim();
+        if (!query) { showStatus('error', 'Please enter a search query', 'searchResults'); return; }
+        document.getElementById('searchLoading').style.display = 'block';
+        document.getElementById('searchResults').innerHTML = '';
+        document.getElementById('irTablesSection').style.display = 'none';
+        fetch('/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: query }) })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('searchLoading').style.display = 'none';
+                if (!data.success) { showStatus('error', data.message, 'searchResults'); return; }
+                displaySearchResults(data.results, data.query);
+                const t = data.ir_tables;
+                if (t && t.doc_ids && t.doc_ids.length > 0) {
+                    buildT1(t); buildT2(t); buildT3(t); buildT4(t); buildT5(t); buildT6(t); buildT7(t);
+                    document.getElementById('irTablesSection').style.display = 'block';
+                }
+            })
+            .catch(e => { document.getElementById('searchLoading').style.display = 'none'; showStatus('error', 'Search error: ' + e.message, 'searchResults'); });
+    }
+    function displaySearchResults(results, query) {
+        const c = document.getElementById('searchResults');
+        if (!results.length) {
+            c.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128269;</div><p>No results found for "' + query + '"</p></div>';
+            return;
+        }
+        let html = '<div class="status-success">Found ' + results.length + ' document(s) for "' + query + '"</div>';
+        results.forEach(r => {
+            html += '<div class="result-item"><div class="result-header"><div class="result-filename">&#128196; ' + r.filename + '</div><div class="result-score">Relevance: ' + r.score + '%</div></div><div class="result-meta">Uploaded: ' + new Date(r.upload_date).toLocaleDateString() + ' | Clauses: ' + r.num_clauses + '</div><div class="clauses">' +
+                (r.clauses.length ? r.clauses.map((cl, i) => '<div class="clause"><div class="clause-label">Matching Clause ' + (i+1) + ':</div>' + hl(cl, query) + '</div>').join('') : '<div class="clause">No specific clauses extracted</div>') +
+                '</div></div>';
+        });
+        c.innerHTML = html;
+    }
+    function hl(text, query) {
+        const words = query.toLowerCase().split(/\s+and\s+|\s+or\s+|\s+not\s+|\s+/);
+        let out = text;
+        words.forEach(w => { if (w.length > 2) out = out.replace(new RegExp('(' + w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<strong style="background:#fff3cd;color:#856404;padding:0 2px">$1</strong>'); });
+        return out;
+    }
+    function sn(n) { return (!n) ? '' : (n.length > 22 ? n.slice(0,20) + '\u2026' : n); }
+    function buildT1(t) {
+        let h = '<table class="ir-tbl"><thead><tr><th>Query Term</th><th>Documents Containing Term</th><th>Doc Freq (df)</th></tr></thead><tbody>';
+        t.inverted_index_table.forEach(r => {
+            const pills = r.documents.length ? r.documents.map(f => '<span class="doc-pill">' + sn(f) + '</span>').join('') : '<em style="color:#ccc">not found</em>';
+            h += '<tr><td><strong>' + r.term + '</strong></td><td>' + pills + '</td><td style="text-align:center"><strong>' + r.doc_freq + '</strong></td></tr>';
+        });
+        document.getElementById('tbl1').innerHTML = h + '</tbody></table>';
+    }
+    function buildT2(t) {
+        let h = '<table class="ir-tbl"><thead><tr><th>#</th><th>Document ID</th><th>Filename</th><th>Retrieved?</th></tr></thead><tbody>';
+        t.boolean_table.forEach((r, i) => {
+            h += '<tr class="' + (r.matched ? 'best-row' : '') + '"><td>' + (i+1) + '</td><td>' + r.doc_id + '</td><td>' + r.filename + '</td><td>' + (r.matched ? '<span class="match-yes">&#9989; Yes &mdash; Retrieved</span>' : '<span class="match-no">&#10060; No</span>') + '</td></tr>';
+        });
+        document.getElementById('tbl2').innerHTML = h + '</tbody></table>';
+    }
+    function buildT3(t) {
+        const cols = t.doc_ids.map(id => '<th>' + sn(t.filenames[id]) + '</th>').join('');
+        let h = '<table class="ir-tbl"><thead><tr><th>Query Term</th>' + cols + '</tr></thead><tbody>';
+        t.tf_table.forEach(r => {
+            h += '<tr><td><strong>' + r.term + '</strong></td>' + r.values.map(v => '<td style="text-align:right">' + v.value.toFixed(4) + '</td>').join('') + '</tr>';
+        });
+        document.getElementById('tbl3').innerHTML = h + '</tbody></table>';
+    }
+    function buildT4(t) {
+        let h = '<table class="ir-tbl"><thead><tr><th>Query Term</th><th>df</th><th>N (Total Docs)</th><th>IDF Value</th></tr></thead><tbody>';
+        t.idf_table.forEach((r, i) => {
+            const df = t.inverted_index_table[i] ? t.inverted_index_table[i].doc_freq : '-';
+            h += '<tr><td><strong>' + r.term + '</strong></td><td style="text-align:center">' + df + '</td><td style="text-align:center">' + t.doc_ids.length + '</td><td style="text-align:right"><strong>' + r.idf.toFixed(4) + '</strong></td></tr>';
+        });
+        document.getElementById('tbl4').innerHTML = h + '</tbody></table>';
+    }
+    function buildT5(t) {
+        const cols = t.doc_ids.map(id => '<th>' + sn(t.filenames[id]) + '</th>').join('');
+        let h = '<table class="ir-tbl"><thead><tr><th>Query Term</th>' + cols + '</tr></thead><tbody>';
+        t.tfidf_table.forEach(r => {
+            h += '<tr><td><strong>' + r.term + '</strong></td>' + r.values.map(v => '<td style="text-align:right">' + v.value.toFixed(4) + '</td>').join('') + '</tr>';
+        });
+        document.getElementById('tbl5').innerHTML = h + '</tbody></table>';
+    }
+    function buildT6(t) {
+        const best = Math.max(...t.cosine_table.map(r => r.cosine));
+        let h = '<table class="ir-tbl"><thead><tr><th>Document ID</th><th>Filename</th><th>Cosine Score</th><th>Visual</th></tr></thead><tbody>';
+        t.cosine_table.forEach(r => {
+            const ib = (r.cosine === best && best > 0);
+            const pct = Math.round(r.cosine * 100);
+            h += '<tr class="' + (ib ? 'best-row' : '') + '"><td>' + r.doc_id + '</td><td>' + r.filename + '</td><td style="text-align:right;font-weight:bold">' + r.cosine.toFixed(4) + (ib ? ' &#127942;' : '') + '</td><td><div class="bar-container"><div class="bar-fill" style="width:' + pct + '%"></div></div> <small>' + pct + '%</small></td></tr>';
+        });
+        document.getElementById('tbl6').innerHTML = h + '</tbody></table>';
+    }
+    function buildT7(t) {
+        let h = '<table class="ir-tbl"><thead><tr><th>Rank</th><th>Document ID</th><th>Filename</th><th>Cosine Score</th><th>Result</th></tr></thead><tbody>';
+        t.ranking_table.forEach(r => {
+            const f = (r.rank === 1);
+            h += '<tr class="' + (f ? 'best-row' : '') + '"><td><span class="rank-badge ' + (f ? 'gold' : '') + '">' + r.rank + '</span></td><td>' + r.doc_id + '</td><td>' + r.filename + '</td><td style="text-align:right;font-weight:bold">' + r.cosine.toFixed(4) + '</td><td>' + (f ? '&#11088; Best Match' : '') + '</td></tr>';
+        });
+        document.getElementById('tbl7').innerHTML = h + '</tbody></table>';
+    }
+    function loadDocuments() {
+        fetch('/documents').then(r => r.json()).then(data => {
+            if (data.success) { documents = data.documents; displayDocuments(); updateStats(); }
+        }).catch(e => console.error(e));
+    }
+    function displayDocuments() {
+        const c = document.getElementById('documentList');
+        if (!documents.length) {
+            c.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#128237;</div><p>No documents uploaded yet</p></div>';
+            return;
+        }
+        c.innerHTML = documents.map(d => '<div class="document-item"><div><div class="document-name">&#128196; ' + d.filename + '</div><div class="document-meta">Uploaded: ' + new Date(d.upload_date).toLocaleDateString() + ' | Size: ' + fmt(d.file_size) + ' | Clauses: ' + d.num_clauses + ' | Words: ' + d.num_tokens + '</div></div><button class="delete-btn" onclick="deleteDocument(\'' + d.doc_id + '\',\'' + d.filename.replace(/'/g,"\\'") + '\')">&#128465;&#65039; Delete</button></div>').join('');
+    }
+    function updateStats() {
+        const tc = documents.reduce((s,d) => s+d.num_clauses, 0);
+        const tw = documents.reduce((s,d) => s+d.num_tokens, 0);
+        document.getElementById('statsContainer').innerHTML =
+            '<div class="stat-card"><div class="stat-number">' + documents.length + '</div><div class="stat-label">Documents</div></div>' +
+            '<div class="stat-card"><div class="stat-number">' + tc + '</div><div class="stat-label">Total Clauses</div></div>' +
+            '<div class="stat-card"><div class="stat-number">' + tw.toLocaleString() + '</div><div class="stat-label">Words Indexed</div></div>';
+    }
+    function deleteDocument(id, name) {
+        if (!confirm('Delete "' + name + '"?')) return;
+        fetch('/delete/' + id, { method: 'DELETE' }).then(r => r.json()).then(data => {
+            if (data.success) { showStatus('success', '"' + name + '" deleted', 'uploadStatus'); loadDocuments(); document.getElementById('searchResults').innerHTML = ''; document.getElementById('irTablesSection').style.display = 'none'; }
+            else showStatus('error', data.message, 'uploadStatus');
+        }).catch(e => showStatus('error', 'Error: ' + e.message, 'uploadStatus'));
+    }
+    function showStatus(type, message, id) {
+        const cls = type === 'success' ? 'status-success' : type === 'error' ? 'status-error' : 'status-info';
+        const el = document.getElementById(id);
+        if (el) { el.innerHTML = '<div class="' + cls + '">' + message + '</div>'; if (type==='success') setTimeout(() => { if(el) el.innerHTML=''; }, 6000); }
+    }
+    function fmt(b) { return b<1024 ? b+' B' : b<1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB'; }
+</script>
+</body>
+</html>
