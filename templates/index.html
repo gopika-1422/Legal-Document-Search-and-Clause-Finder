@@ -1,18 +1,4 @@
-
-import os
-
-# Create templates folder
-os.makedirs('templates', exist_ok=True)
-os.makedirs('uploads', exist_ok=True)
-
-# Delete old broken index files
-for f in ['inverted_index.json', 'documents_metadata.json', 'ir_store.json']:
-    if os.path.exists(f):
-        os.remove(f)
-        print(f"Deleted {f}")
-
-# Write the correct index.html
-html = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -49,7 +35,7 @@ html = r"""<!DOCTYPE html>
         .loading { display: none; text-align: center; padding: 20px; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .result-item { background: #f8f9ff; border-left: 4px solid #667eea; padding: 20px; margin-bottom: 15px; border-radius: 8px; }
+        .result-item { background: #f8f9ff; border-left: 4px solid #667eea; padding: 20px; margin-bottom: 15px; border-radius: 8px; transition: all 0.2s; }
         .result-item:hover { box-shadow: 0 5px 15px rgba(0,0,0,0.1); transform: translateX(5px); }
         .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .result-filename { font-size: 1.2em; font-weight: bold; color: #333; }
@@ -72,7 +58,6 @@ html = r"""<!DOCTYPE html>
         .document-meta { font-size: 0.85em; color: #666; margin-top: 3px; }
         .delete-btn { background: #ff4757; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.9em; }
         .delete-btn:hover { background: #e53935; }
-        /* IR TABLES */
         #irTablesSection { display: none; margin-top: 30px; }
         #irTablesSection h3 { color: #667eea; font-size: 1.4em; margin-bottom: 20px; padding-top: 20px; border-top: 3px solid #e8ebff; }
         .ir-table-block { background: #fff; border: 2px solid #e0e4ff; border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
